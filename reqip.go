@@ -48,7 +48,7 @@ func getClientIPFromXForwardedFor(header string) string {
 	return ""
 }
 
-// GetClientIP : Parse all headers headers.
+// GetClientIP : Parse all headers.
 func GetClientIP(r *http.Request) string {
 	headers := r.Header
 
