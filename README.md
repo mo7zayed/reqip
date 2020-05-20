@@ -1,6 +1,13 @@
 # reqip
 A simple tool for retrieving a request's IP address on the server. Inspired from [request-ip](https://github.com/pbojinov/request-ip)
 
+# Installation
+Via `go get`
+
+```bash
+go get github.com/mo7zayed/reqip
+```
+
 # How to use
 ```golang
 package main
