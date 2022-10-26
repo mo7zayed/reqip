@@ -1,9 +1,13 @@
 package reqip
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strings"
+
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 // IsIP : Check if the given ip address is valid
@@ -54,12 +58,12 @@ func GetClientIP(r *http.Request) string {
 
 	if len(headers) > 0 {
 		checklist := []string{
-			"x-client-ip", // Standard headers used by Amazon EC2, Heroku, and others.
-			"x-forwarded-for", // Load-balancers (AWS ELB) or proxies.
-			"cf-connecting-ip", // @see https://support.cloudflare.com/hc/en-us/articles/200170986-How-does-Cloudflare-handle-HTTP-Request-headers-
-			"fastly-client-ip", // Fastly and Firebase hosting header (When forwared to cloud function)
-			"true-client-ip", // Akamai and Cloudflare: True-Client-IP.
-			"x-real-ip", // Default nginx proxy/fcgi; alternative to x-forwarded-for, used by some proxies.
+			"x-client-ip",         // Standard headers used by Amazon EC2, Heroku, and others.
+			"x-forwarded-for",     // Load-balancers (AWS ELB) or proxies.
+			"cf-connecting-ip",    // @see https://support.cloudflare.com/hc/en-us/articles/200170986-How-does-Cloudflare-handle-HTTP-Request-headers-
+			"fastly-client-ip",    // Fastly and Firebase hosting header (When forwarded to cloud function)
+			"true-client-ip",      // Akamai and Cloudflare: True-Client-IP.
+			"x-real-ip",           // Default nginx proxy/fcgi; alternative to x-forwarded-for, used by some proxies.
 			"x-cluster-client-ip", // (Rackspace LB and Riverbed's Stingray) http://www.rackspace.com/knowledge_center/article/controlling-access-to-linux-cloud-sites-based-on-the-client-ip-address
 			"x-forwarded",
 			"forwarded-for",
@@ -85,4 +89,45 @@ func GetClientIP(r *http.Request) string {
 	}
 
 	return ""
+}
+
+// GetClientIPgRPC : Parse all headers.
+func GetClientIPgRPC(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+
+	if md.Len() > 0 {
+		checklist := []string{
+			"x-client-ip",         // Standard headers used by Amazon EC2, Heroku, and others.
+			"x-forwarded-for",     // Load-balancers (AWS ELB) or proxies.
+			"cf-connecting-ip",    // @see https://support.cloudflare.com/hc/en-us/articles/200170986-How-does-Cloudflare-handle-HTTP-Request-headers-
+			"fastly-client-ip",    // Fastly and Firebase hosting header (When forwarded to cloud function)
+			"true-client-ip",      // Akamai and Cloudflare: True-Client-IP.
+			"x-real-ip",           // Default nginx proxy/fcgi; alternative to x-forwarded-for, used by some proxies.
+			"x-cluster-client-ip", // (Rackspace LB and Riverbed's Stingray) http://www.rackspace.com/knowledge_center/article/controlling-access-to-linux-cloud-sites-based-on-the-client-ip-address
+			"x-forwarded",
+			"forwarded-for",
+			"forwarded",
+		}
+
+		for _, h := range checklist {
+			if h == "x-forwarded-for" {
+				header := md.Get(h)
+				if ip := getClientIPFromXForwardedFor(header[0]); isIP(ip) {
+					return ip
+				}
+				continue
+			}
+
+			if ip := md.Get(h); isIP(ip[0]) {
+				return ip[0]
+			}
+		}
+	}
+
+	p, _ := peer.FromContext(ctx)
+	hostPort := strings.Split(p.Addr.String(), ":")
+	return hostPort[0]
 }
